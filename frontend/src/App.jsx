@@ -31,6 +31,77 @@ function App() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // AI Description Generator state
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiDisclaimer, setAiDisclaimer] = useState(false);
+  const [aiNotice, setAiNotice] = useState("");
+
+  // Generate task description using backend AI endpoint
+  const handleGenerateDescription = async () => {
+    setAiError("");
+    setAiNotice("");
+
+    if (!title.trim()) {
+      setAiError("Please enter a task title first to generate an AI description.");
+      return;
+    }
+
+    if (title.trim().length < 3) {
+      setAiError("Task title must be at least 3 characters long.");
+      return;
+    }
+
+    if (description.trim()) {
+      const confirmOverwrite = window.confirm(
+        "A description already exists. Do you want to replace it with an AI-generated suggestion?"
+      );
+      if (!confirmOverwrite) {
+        return;
+      }
+    }
+
+    try {
+      setAiLoading(true);
+
+      const response = await fetch(`${API_BASE}/api/ai/generate-description`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: title.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.status === 429) {
+        setAiError(data.message || "Rate limit reached. Please wait a moment before trying again.");
+        return;
+      }
+
+      if (!response.ok) {
+        setAiError(data.message || "Failed to generate AI description.");
+        return;
+      }
+
+      if (data.fallback) {
+        setAiNotice(data.message || "AI suggestions are temporarily unavailable. Please enter a description manually.");
+        setAiDisclaimer(false);
+      } else if (data.description) {
+        setDescription(data.description);
+        setAiDisclaimer(true);
+        setAiNotice("AI suggestion generated! Review and edit as needed before adding.");
+      }
+    } catch {
+      setAiError("Unable to connect to AI generation service. You can write the description manually.");
+      setAiDisclaimer(false);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   // Logout handler
   const handleLogout = useCallback((customMsg = "") => {
     localStorage.removeItem("task_auth_token");
@@ -234,6 +305,9 @@ function App() {
     setDescription("");
     setError("");
     setMessage("");
+    setAiDisclaimer(false);
+    setAiNotice("");
+    setAiError("");
 
     try {
       setLoading(true);
@@ -528,10 +602,10 @@ function App() {
       <div className="container">
         <header className="header">
           <div>
-            <p className="eyebrow">Practical 7</p>
+            <p className="eyebrow">Practical 13</p>
             <h1>Task Manager</h1>
             <p className="subtitle">
-              Node.js + Express + MongoDB + JWT Authentication
+              Node.js + Express + MongoDB + AI Integration (OpenAI / Gemini)
             </p>
           </div>
 
@@ -562,21 +636,80 @@ function App() {
         {message && <p className="success">{message}</p>}
 
         <form className="task-form" onSubmit={addTask}>
-          <input
-            type="text"
-            placeholder="Task title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
+          <div className="form-group-task">
+            <label htmlFor="task-title" className="task-field-label">Task Title</label>
+            <input
+              id="task-title"
+              type="text"
+              placeholder="e.g. Prepare Practical 13 report"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (aiError) setAiError("");
+              }}
+              required
+            />
+          </div>
 
-          <input
-            type="text"
-            placeholder="Task description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+          <div className="description-container">
+            <div className="description-header">
+              <label htmlFor="task-description" className="task-field-label">Task Description</label>
+              <button
+                type="button"
+                className={`btn-ai-generate ${aiLoading ? "loading" : ""}`}
+                onClick={handleGenerateDescription}
+                disabled={aiLoading}
+                title="Auto-generate description from title using AI"
+              >
+                {aiLoading ? (
+                  <>
+                    <span className="spinner-icon">⏳</span> Generating description...
+                  </>
+                ) : (
+                  <>
+                    <span className="sparkle-icon">✨</span> Generate description
+                  </>
+                )}
+              </button>
+            </div>
 
-          <button type="submit">Add Task</button>
+            <textarea
+              id="task-description"
+              className="task-textarea"
+              placeholder="Enter a task description, or click 'Generate description' above for an AI suggestion"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (aiDisclaimer) setAiDisclaimer(false);
+              }}
+              rows={3}
+            />
+
+            {aiDisclaimer && (
+              <div className="ai-disclaimer" role="alert">
+                <span className="ai-badge">AI</span>
+                <span>AI-generated suggestion — please review and edit before saving.</span>
+              </div>
+            )}
+
+            {aiNotice && !aiDisclaimer && (
+              <div className="ai-notice">
+                <span>💡</span>
+                <span>{aiNotice}</span>
+              </div>
+            )}
+
+            {aiError && (
+              <div className="ai-error-banner" role="alert">
+                <span>⚠️</span>
+                <span>{aiError}</span>
+              </div>
+            )}
+          </div>
+
+          <button type="submit" className="btn-add-task" disabled={loading}>
+            {loading ? "Adding..." : "Add Task"}
+          </button>
         </form>
 
         <section>

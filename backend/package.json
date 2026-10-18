@@ -1,7 +1,7 @@
 {
-  "name": "24cs018-practical12-cicd-githubactions",
+  "name": "24cs018-practical13-ai-api-integration",
   "version": "1.0.0",
-  "description": "ITUE301 Practical 12: CI/CD Pipeline with GitHub Actions for Task Management Application",
+  "description": "ITUE301 Practical 13: AI API Integration into a Web Application (Task Management System)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -18,7 +18,8 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.2",
-    "node-cache": "^5.1.2"
+    "node-cache": "^5.1.2",
+    "openai": "^7.38.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

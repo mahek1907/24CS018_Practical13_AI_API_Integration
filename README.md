@@ -1,289 +1,244 @@
-# Practical 12: CI/CD Pipeline with GitHub Actions
+# Practical 13: AI API Integration into a Web Application
 
-[![CI Pipeline](https://github.com/mahek1907/24CS018_Practical12_CICD_GitHubActions/actions/workflows/ci.yml/badge.svg)](https://github.com/mahek1907/24CS018_Practical12_CICD_GitHubActions/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/mahek1907/24CS018_Practical13_AI_API_Integration/actions/workflows/ci.yml/badge.svg)](https://github.com/mahek1907/24CS018_Practical13_AI_API_Integration/actions/workflows/ci.yml)
 
 **Course:** Advanced Web Development Frameworks (ITUE301)  
 **Student ID:** 24CS018  
-**Repository:** `24CS018_Practical12_CICD_GitHubActions`  
-**GitHub URL:** [https://github.com/mahek1907/24CS018_Practical12_CICD_GitHubActions](https://github.com/mahek1907/24CS018_Practical12_CICD_GitHubActions)  
-**Technology Stack:** GitHub Actions, Jest, Supertest, ESLint, Node.js (v20), Express.js, MongoDB (v6.0), Mongoose, React (Vite), Docker, Docker Compose
+**Repository:** `24CS018_Practical13_AI_API_Integration`  
+**GitHub URL:** [https://github.com/mahek1907/24CS018_Practical13_AI_API_Integration](https://github.com/mahek1907/24CS018_Practical13_AI_API_Integration)  
+**Technology Stack:** React 19 (Vite), Node.js (v20), Express.js, OpenAI API / Gemini API, MongoDB, Mongoose, Node-Cache, EventEmitter, Docker, Docker Compose, Jest, Supertest, ESLint
 
 ---
 
 ## 1. Project Overview
 
-### Purpose
-The **Task Management Application** is a full-stack, production-grade web system designed for managing user tasks with secure authentication, sub-millisecond in-memory caching, decoupled asynchronous event processing, containerized microservice deployment, and an automated **Continuous Integration (CI)** pipeline powered by **GitHub Actions**.
-
-### Student Information
-- **Student ID:** 24CS018
-- **Program:** B.Tech (IT/CE/CSE/AIML) — Charotar University of Science and Technology (CHARUSAT)
-
-### Cumulative Features Implemented (Practicals 1–11)
-The application preserves all verified source code and features built across Practicals 1 through 11 without rewriting or feature loss:
-
-1. **Practicals 1–4 (Node.js & Express Architecture):**
-   - Modular MVC structure with dedicated routers (`routes/authRoutes.js`, `routes/taskRoutes.js`), custom logger middleware (`middleware/logger.js`), and centralized error handling (`middleware/errorHandler.js`).
-2. **Practicals 5 & 6 (React Single-Page Application):**
-   - Responsive user interface built with Vite, React 19, custom CSS styling, task creation modal, real-time status filtering, and task editing.
-3. **Practical 7 (JWT Authentication & Input Validation):**
-   - User registration (`POST /register`) with 10 salt rounds `bcryptjs` password hashing, authentication (`POST /login`) issuing 1-hour signed JSON Web Tokens, Bearer token verification middleware (`middleware/auth.js`), and payload sanitization/validation (`middleware/validate.js`).
-4. **Practical 8 (Mongoose Query Optimization):**
-   - Lean query execution (`.lean()`) eliminating Mongoose hydration overhead and compound indexing `{ userId: 1, createdAt: -1 }` on MongoDB.
-5. **Practical 9 (In-Memory Caching with `node-cache`):**
-   - Cache layer in `config/cache.js` caching `GET /tasks` (User list cache) and `GET /tasks/:id` (Single task cache) with automatic cache invalidation on task mutations (`POST`, `PUT`, `DELETE`).
-   - Cache metrics monitoring via `GET /debug/cache-stats` and cache reset via `POST /tasks/cache/reset`.
-6. **Practical 10 (Asynchronous Event-Driven Architecture):**
-   - Node.js native `EventEmitter` singleton (`events.js`) and background notification listeners (`listeners.js`).
-   - Immediate HTTP 201 response on `POST /tasks` before an asynchronous simulated notification completes after a 2-second delay.
-   - `DELETE /tasks/:id` emits `task-deleted` for background cleanup and audit logging with safe error containment (`task-notification-error`).
-7. **Practical 11 (Containerization & Multi-Service Orchestration):**
-   - Production Dockerfiles for backend (`node:20-alpine`) and frontend (multi-stage build with `nginx:alpine`).
-   - `docker-compose.yml` orchestrating `frontend` (port 5173), `backend` (port 5000), and `mongodb` (port 27018 host / 27017 container) connected via isolated bridge network `app-network` with persistent volume `task_manager_mongo_data`.
-
----
-
-## 2. Practical 12: CI/CD Pipeline with GitHub Actions
-
 ### Aim & Objectives
-- **Aim:** To automate testing, code quality verification, and regression prevention for the Task Management full-stack application using a Continuous Integration (CI) pipeline built with GitHub Actions.
+- **Aim:** To integrate an external Artificial Intelligence (AI) API securely through a Node.js/Express backend into a full-stack Task Management application, generating concise, context-aware task descriptions from task titles while guaranteeing server-side credential isolation, rate limiting, and graceful degradation.
 - **Objectives:**
-  1. Prepare the backend application for headless automated testing using **Jest** and **Supertest** without requiring a live production database.
-  2. Implement a comprehensive automated test suite checking real application behavior (health checks, authentication enforcement, task retrieval, validation errors, resource lookups, cache stats, and 404 routing).
-  3. Configure code quality and linting using **ESLint** (v10 flat configuration).
-  4. Author a valid GitHub Actions workflow file located at `.github/workflows/ci.yml`.
-  5. Configure multi-job dependency execution (`lint` job followed by `build-and-test` job).
-  6. Demonstrate a **deliberate pipeline failure** caused by an intentional test assertion error.
-  7. Correct the test assertion and demonstrate a **successful green pipeline run**.
-  8. Publish the project to a dedicated GitHub repository: `24CS018_Practical12_CICD_GitHubActions`.
-
-### What is Continuous Integration?
-**Continuous Integration (CI)** is a software engineering practice where developers frequently commit code changes to a central repository (such as GitHub). Each push or pull request automatically triggers an automated build and test pipeline that compiles dependencies, executes linters, and runs the entire automated test suite. CI detects integration errors and regressions immediately, providing immediate feedback before flawed code reaches staging or production.
-
-### Workflow Architecture
-The CI pipeline executes on an ephemeral Ubuntu runner (`ubuntu-latest`) whenever code is pushed or a pull request is submitted targeting the `main` branch.
-
-```
-git push origin main
-       │
-       ▼
-GitHub Actions Trigger (on: push / pull_request [main])
-       │
-       ├─────────────────────────────────────────┐
-       ▼                                         ▼
- Job 1: Code Quality & Linting           Job 2: Build & Automated Tests
- ├── Checkout code (actions/checkout@v4)  (depends on Job 1: `needs: lint`)
- ├── Setup Node.js 20                    ├── Checkout code (actions/checkout@v4)
- ├── Cache npm dependencies              ├── Setup Node.js 20
- ├── Install dependencies (npm install)  ├── Cache npm dependencies
- └── Run ESLint (npm run lint)           ├── Install dependencies (npm install)
-                                         ├── Run automated tests (npm test)
-                                         └── Report pass/fail status
-                                                 │
-                                                 ▼
-                             Pass: Green Checkmark (✓) / Fail: Red X (✗)
-```
-
-### Workflow Configuration Details
-- **File Location:** `.github/workflows/ci.yml`
-- **Triggers:**
-  - `push` on branch `main`
-  - `pull_request` on branch `main`
-- **Permissions:** `contents: read`
-- **Jobs:**
-  1. `lint` (`Code Quality & Linting`):
-     - Runner: `ubuntu-latest`
-     - Node Version: `20`
-     - Command: `npm run lint` (ESLint flat config)
-  2. `build-and-test` (`Build & Automated Tests`):
-     - Runner: `ubuntu-latest`
-     - Dependency: `needs: lint` (guarantees tests run only after lint checks pass)
-     - Command: `npm test` (`jest --runInBand`)
+  1. Inspect and preserve all cumulative working features developed across Practicals 1 through 12 (CRUD, JWT auth, lean MongoDB queries, sub-millisecond node-cache caching, EventEmitter background listeners, Docker Compose multi-service architecture, and GitHub Actions CI).
+  2. Implement a secure backend endpoint `POST /api/ai/generate-description` utilizing the official OpenAI Node.js SDK with fallback support for Google Gemini API.
+  3. Keep secret API keys exclusively in the backend `.env` file—ensuring zero client-side leakage, no `VITE_` prefix exposure, and exclusion from Git version control.
+  4. Implement per-task/IP rate limiting (1 request per minute per task) and comprehensive input validation (3–200 characters).
+  5. Provide resilient error handling and graceful fallback responses when API keys are unconfigured, rate limits are exceeded, or upstream providers fail.
+  6. Enhance the React frontend task creation form with a non-blocking "✨ Generate description" action, loading indicator, editable textarea, and transparent AI disclaimer.
+  7. Maintain 100% automated test coverage with Jest and Supertest, passing all 17 integration and AI unit tests under CI.
 
 ---
 
-## 3. Automated Test Suite & Linter
+## 2. Architecture & Data Flow
 
-### Test Framework
-- **Jest:** JavaScript test runner providing assertion libraries, test isolation, and mock/spy capabilities.
-- **Supertest:** HTTP assertion library providing programmatic API testing against Express applications without binding to live network sockets.
+### Secure Backend-Proxy Architecture
+Client browsers **never** communicate directly with the AI service. The Express backend acts as an authenticated, validating reverse proxy:
 
-### Implemented Test Cases (`backend/tests/api.test.js`)
-The test suite consists of **10 comprehensive automated tests** organized into 5 logical categories:
-
-| # | Category | Test Case | Target Endpoint | Expected Behavior |
-|---|---|---|---|---|
-| 1 | Health & Server Info | Server Health & Student Identity | `GET /` | HTTP 200, `{ status: "active", studentId: "24CS018" }` |
-| 2 | Health & Server Info | Cache Metrics Verification | `GET /debug/cache-stats` | HTTP 200, metrics `{ hits, misses, totalRequests, hitRate }` |
-| 3 | Security & Auth | Missing Token Handling | `GET /tasks` | HTTP 401, `{ message: "Access denied. No token provided." }` |
-| 4 | Security & Auth | Malformed Header Handling | `GET /tasks` | HTTP 401, error requiring `'Bearer <token>'` format |
-| 5 | Task Retrieval | Authenticated Task Fetch | `GET /tasks` | HTTP 200, array of tasks returned for authenticated user |
-| 6 | Validation | Missing Title Validation | `POST /tasks` | HTTP 400, `{ message: "Task title is required and cannot be empty" }` |
-| 7 | Creation & Events | Valid Task Creation | `POST /tasks` | HTTP 201, created task returned, `task-created` event emitted |
-| 8 | Resource Lookup | Invalid ID Format Validation | `GET /tasks/:id` | HTTP 400, `{ message: "Invalid Task ID format" }` |
-| 9 | Resource Lookup | Nonexistent Task Lookup | `GET /tasks/:id` | HTTP 404, `{ message: "Task not found or unauthorized" }` |
-| 10 | Route Handling | Undefined Route 404 | `GET /nonexistent` | HTTP 404, `{ message: "Route not found" }` |
-
-### Architectural Decoupling for Tests
-- In `backend/app.js`, Express application configuration is separated from unconditional database connection:
-  ```javascript
-  // Connect to MongoDB if not running in automated test mode
-  if (process.env.NODE_ENV !== "test") {
-      connectDB();
-  }
-  ```
-- This enables Supertest to import `app` directly and execute tests with zero database lag or missing daemon errors.
-- In `backend/middleware/auth.js`, a fallback JWT secret is provided so tests and CI environments run seamlessly without requiring uncommitted production `.env` files.
-
-### ESLint Configuration (`backend/eslint.config.js`)
-- Uses modern **ESLint flat configuration format** compatible with ESLint v10.
-- Configured with `@eslint/js` recommended rules, `globals.node`, and `globals.jest`.
-- Enforces unused variable protection with regex exceptions for ignored arguments (`^_`).
-- `npm run lint` executes cleanly with **0 errors and 0 warnings**.
-
----
-
-## 4. Evidence of CI Pipeline Execution
-
-### A. Failed Pipeline Run (Deliberate Test Failure)
-To satisfy the requirements of Practical 12, a meaningful test assertion was deliberately altered:
-- **Modified File:** `backend/tests/api.test.js`
-- **Deliberate Change:** Changed `expect(res.statusCode).toBe(200)` to `expect(res.statusCode).toBe(500)` in `GET /tasks returns 200 with task list when authenticated`.
-- **Commit:** `cc386bb2728df13fbb344cbdf288c148dc0d4ff0`
-- **Workflow Run ID:** `39119506131`
-- **Result:**
-  - `Code Quality & Linting` job: **PASSED** (10s)
-  - `Build & Automated Tests` job: **FAILED** at step `Run backend automated tests` (12s)
-  - Exit code: `1` (Non-zero exit halted the pipeline)
-
-![Failed Pipeline Run](docs/screenshots/failed_pipeline_run.png)
-
-```text
-FAIL tests/api.test.js
-  Task Management API - CI/CD Automated Test Suite
-    3. Task Retrieval & In-Memory Caching (Practical 9)
-      x GET /tasks returns 200 with task list when authenticated
-
-    expect(received).toBe(expected) // Object.is equality
-
-    Expected: 500
-    Received: 200
-
-      82 |
-      83 |             // Deliberate test assertion failure for Practical 12 demonstration
-    > 84 |             expect(res.statusCode).toBe(500);
-         |                                    ^
-      85 |             expect(Array.isArray(res.body)).toBe(true);
-
-Test Suites: 1 failed, 1 total
-Tests:       1 failed, 9 passed, 10 total
-##[error]Process completed with exit code 1.
+```
+┌────────────────────────────────┐
+│   React Frontend (Vite SPA)    │
+│  - Task Title Input            │
+│  - "✨ Generate description"   │
+│  - Editable Description Field  │
+│  - Disclaimer & Error Badges   │
+└───────────────┬────────────────┘
+                │  POST /api/ai/generate-description
+                │  Body: { title: "Prepare Practical 13 report" }
+                ▼
+┌────────────────────────────────────────────────────────┐
+│              Express Backend (Port 5000)               │
+│                                                        │
+│  1. Input Validation (title: 3-200 chars)              │
+│  2. In-Memory Rate Limiter (1 req/min per task/IP)     │
+│  3. Server-Side Secret Key (process.env.OPENAI_API_KEY)│
+│  4. Graceful Fallback Interceptor                      │
+└───────────────┬─────────────────────────┬──────────────┘
+                │                         │
+     (Primary Provider)            (Fallback Provider)
+                ▼                         ▼
+┌───────────────────────────────┐ ┌──────────────────────┐
+│       OpenAI API Service      │ │  Google Gemini API   │
+│    Model: gpt-4o-mini / gpt-4 │ │ Model: gemini-1.5-fl │
+│    Prompt: Concise task desc  │ └──────────────────────┘
+└───────────────────────────────┘
 ```
 
 ---
 
-### B. Successful Pipeline Run (Corrected Test Assertion)
-Following verification of the failure in the GitHub Actions tab:
-- **Correction:** Restored `expect(res.statusCode).toBe(200)`.
-- **Commit:** `85dea36d727ff6818685976a4ac65930100c60ef`
-- **Workflow Run ID:** `39119999648`
-- **Result:**
-  - `Code Quality & Linting` job: **PASSED** (11s)
-  - `Build & Automated Tests` job: **PASSED** (17s)
-  - **Status:** All checks passed (Green checkmark ✓)
+## 3. API Specification
 
-![Successful Pipeline Run](docs/screenshots/successful_pipeline_run.png)
+### Endpoint: `POST /api/ai/generate-description`
+
+#### Headers
+```http
+Content-Type: application/json
+```
+
+#### Request Payload
+```json
+{
+  "title": "Prepare Practical 13 report"
+}
+```
+
+#### Successful Response (HTTP 200)
+When an AI provider is configured and returns a completion:
+```json
+{
+  "description": "Review practical requirements, implement AI API integration with backend proxy, execute automated tests, and document testing and security results.",
+  "fallback": false
+}
+```
+
+#### Graceful Fallback Response (HTTP 200)
+When no API key is configured or upstream AI services are unreachable:
+```json
+{
+  "description": "",
+  "fallback": true,
+  "message": "AI suggestions are temporarily unavailable. Please write the description manually."
+}
+```
+
+#### Validation Error (HTTP 400)
+When the title is missing, not a string, or out of character bounds:
+```json
+{
+  "error": "Validation Error",
+  "message": "Task title is required and must be between 3 and 200 characters."
+}
+```
+
+#### Rate Limit Exceeded (HTTP 429)
+When repeated generation requests for the same task title are received within 60 seconds:
+```json
+{
+  "error": "Rate limit exceeded",
+  "message": "AI description recently requested for this task. Please wait 45s before requesting again.",
+  "retryAfter": 45
+}
+```
+
+---
+
+## 4. Frontend Integration & UX
+
+The React frontend (`frontend/src/App.jsx` and `App.css`) integrates the AI generator directly into the task creation workflow:
+
+1. **Non-Blocking Trigger:** Clicking **✨ Generate description** disables the button, updates its label to `Generating description...`, and displays a spinning indicator without freezing the rest of the form.
+2. **Title Pre-Check:** Alerts the user immediately if they attempt to generate a description without entering a title first.
+3. **Overwrite Safeguard:** If text is already entered in the description field, the user is prompted for confirmation before the AI suggestion populates the field.
+4. **Transparent AI Disclaimer:** Displays an informative banner:  
+   `🤖 AI-generated suggestion — please review and edit before saving.`
+5. **Full Editability:** The AI response is placed directly into the standard `<textarea>`, allowing the user to accept, edit, expand, or reject the suggestion prior to submitting the task.
+6. **Graceful Error UI:** Displays friendly error badges when rate limits are reached or suggestions are unavailable, guiding the user to write their description manually without failing the form submission.
+
+---
+
+## 5. Security & Responsible AI Considerations
+
+### 1. Zero API Key Exposure
+- The secret key `OPENAI_API_KEY` (or `GEMINI_API_KEY`) is stored exclusively in `backend/.env`.
+- Frontend environment variables (`VITE_*`) are never used for secrets.
+- Backend `.env` is ignored by `.gitignore` and never committed to Git.
+- `backend/.env.example` provides non-sensitive placeholders only.
+
+### 2. Rate Limiting & Cost Protection
+- In-memory rate limiting prevents abuse, bot scraping, and runaway API billing by restricting generation requests to **1 request per 60 seconds** per task title/IP.
+
+### 3. Graceful Degradation
+- If the AI service experiences downtime, quota exhaustion, or network disconnects, the backend catches the error and returns `{ fallback: true }`. The core task management functionality (CRUD, authentication, caching) remains 100% operational.
+
+### 4. Human-in-the-Loop & Content Safety
+- AI outputs are strictly treated as draft suggestions.
+- The user retains complete editorial control before any task is saved to the database.
+- Prompts enforce strict task-oriented instructions (concise, professional action steps).
+
+---
+
+## 6. Automated Testing & Verification
+
+The Jest and Supertest test suite (`backend/tests/api.test.js`) verifies all 17 system and AI integration tests:
 
 ```text
 PASS tests/api.test.js
   Task Management API - CI/CD Automated Test Suite
     1. Health & Server Info Endpoints
-      v GET / returns 200 with student ID and active status (59 ms)
-      v GET /debug/cache-stats returns 200 with cache metrics (Practical 9) (11 ms)
+      ✓ GET / returns 200 with student ID and active status (50 ms)
+      ✓ GET /debug/cache-stats returns 200 with cache metrics (Practical 9) (11 ms)
     2. Authentication & Authorization Enforcement
-      v GET /tasks returns 401 when no token is provided (10 ms)
-      v GET /tasks returns 401 when token format is invalid (10 ms)
+      ✓ GET /tasks returns 401 when no token is provided (11 ms)
+      ✓ GET /tasks returns 401 when token format is invalid (7 ms)
     3. Task Retrieval & In-Memory Caching (Practical 9)
-      v GET /tasks returns 200 with task list when authenticated (13 ms)
+      ✓ GET /tasks returns 200 with task list when authenticated (10 ms)
     4. Task Creation, Validation & Events (Practicals 7 & 10)
-      v POST /tasks returns 400 when title is missing or empty (23 ms)
-      v POST /tasks returns 201 and emits task-created event when valid (20 ms)
+      ✓ POST /tasks returns 400 when title is missing or empty (16 ms)
+      ✓ POST /tasks returns 201 and emits task-created event when valid (16 ms)
     5. Resource Lookup & Error Handling
-      v GET /tasks/:id returns 400 for invalid ObjectId format (10 ms)
-      v GET /tasks/:id returns 404 when task does not exist (11 ms)
-      v GET /nonexistent-route returns 404 route not found (11 ms)
+      ✓ GET /tasks/:id returns 400 for invalid ObjectId format (7 ms)
+      ✓ GET /tasks/:id returns 404 when task does not exist (11 ms)
+      ✓ GET /nonexistent-route returns 404 route not found (6 ms)
+    6. AI Task Description Integration (Practical 13)
+      ✓ POST /api/ai/generate-description returns 400 when title is missing (12 ms)
+      ✓ POST /api/ai/generate-description returns 400 when title is too short (10 ms)
+      ✓ POST /api/ai/generate-description returns 400 when title exceeds 200 chars (8 ms)
+      ✓ POST /api/ai/generate-description returns graceful fallback when no API key configured (10 ms)
+      ✓ POST /api/ai/generate-description returns 200 with generated description when AI provider succeeds (9 ms)
+      ✓ POST /api/ai/generate-description returns 429 when rate limit is exceeded on same task (809 ms)
+      ✓ POST /api/ai/generate-description degrades gracefully on AI provider error (260 ms)
 
 Test Suites: 1 passed, 1 total
-Tests:       10 passed, 10 total
+Tests:       17 passed, 17 total
 Snapshots:   0 total
-Time:        1.375 s
-Ran all test suites.
+Time:        2.3 s
 ```
+
+### ESLint & Build Status
+- `npm run lint` (ESLint v10): **0 errors, 0 warnings**
+- `npm run build` (Vite frontend production build): **Built cleanly in 803ms**
 
 ---
 
-## 5. Running and Testing Locally
+## 7. Setup & Execution Guide
 
-### Prerequisites
-- Node.js (v18 or v20 LTS)
-- npm (v9 or v10)
-- Docker Desktop (optional, for running containerized stack)
-
-### 1. Installation
-Clone the repository and install backend and frontend dependencies:
-
+### 1. Clone & Install
 ```bash
-git clone https://github.com/mahek1907/24CS018_Practical12_CICD_GitHubActions.git
-cd 24CS018_Practical12_CICD_GitHubActions
+git clone https://github.com/mahek1907/24CS018_Practical13_AI_API_Integration.git
+cd 24CS018_Practical13_AI_API_Integration
 
-# Install backend dependencies
+# Backend setup
 cd backend
 npm install
 
-# Install frontend dependencies
+# Frontend setup
 cd ../frontend
 npm install
 ```
 
-### 2. Environment Variables
-Create a `.env` file in the `backend/` directory based on `.env.example`:
-
-```bash
+### 2. Configure Environment
+Create `backend/.env`:
+```env
 PORT=5000
 MONGO_URI=mongodb://127.0.0.1:27017/taskmanager
 JWT_SECRET=p7_task_manager_secure_jwt_secret_key_2026_charusat
+OPENAI_API_KEY=your_actual_openai_api_key_here
+# Optional: GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ### 3. Run Automated Tests
-Run the Jest and Supertest test suite locally:
-
 ```bash
 cd backend
 npm test
 ```
 
-### 4. Run Linter
-Verify code quality using ESLint:
-
+### 4. Run Locally
 ```bash
-cd backend
-npm run lint
-```
-
-### 5. Start Application Locally
-```bash
-# Start backend server
+# Terminal 1: Backend
 cd backend
 npm start
 
-# In a separate terminal, start frontend
+# Terminal 2: Frontend
 cd frontend
 npm run dev
 ```
 
-### 6. Start Full Application via Docker Compose (Practical 11)
-To spin up all 3 containers (`frontend`, `backend`, `mongodb`) with persistent volumes:
-
+### 5. Run via Docker Compose (Multi-Service Stack)
 ```bash
 docker compose up -d --build
 ```
@@ -293,63 +248,40 @@ docker compose up -d --build
 
 ---
 
-## 6. Viva Questions & Answers
+## 8. Viva Questions & Comprehensive Answers
 
-### 1. What is CI/CD?
-**CI/CD** stands for **Continuous Integration** and **Continuous Delivery** (or **Continuous Deployment**). It is a set of DevOps practices that automates the software delivery lifecycle. Continuous Integration automatically validates, builds, and tests code changes submitted by developers. Continuous Delivery/Deployment automatically packages and releases verified code to staging or production environments.
+### 1. Why should the AI API key never be exposed in the frontend?
+**Answer:** The frontend is client-side code executed directly in the user's browser. Any environment variable prefixed with `VITE_` or embedded in JavaScript bundles is visible through browser DevTools, network inspection, and bundle source maps. If an AI API key is exposed client-side, malicious actors can extract it, consume paid API credits, exceed rate limits, or use it for unauthorized activities resulting in severe financial and security liabilities.
 
-### 2. What is the difference between Continuous Integration and Continuous Deployment?
-- **Continuous Integration (CI):** Focuses on automatically integrating code changes from multiple developers, installing dependencies, running linters, and executing automated tests to ensure no regressions occur. This practical demonstrates Continuous Integration.
-- **Continuous Deployment (CD):** Takes the process one step further by automatically deploying every change that passes all CI stages directly into a production environment without manual intervention.
+### 2. How does the backend act as a proxy for the AI service?
+**Answer:** In the proxy architecture, the client frontend only makes requests to its own backend (`POST /api/ai/generate-description`). The backend validates user input, checks authorization, enforces rate limits, securely loads the secret API key from server environment variables (`process.env.OPENAI_API_KEY`), and dispatches the request to the upstream AI provider. The backend parses and sanitizes the AI output before returning a clean JSON response to the client.
 
-### 3. What is GitHub Actions?
-**GitHub Actions** is a native Continuous Integration and Continuous Delivery (CI/CD) and workflow automation platform built directly into GitHub. It allows developers to automate tasks such as running tests, building Docker containers, checking code formatting, and deploying applications directly in response to GitHub repository events (such as push, pull request, or release).
+### 3. What happens if the AI API is down or the key is invalid?
+**Answer:** The application implements **graceful degradation**. Rather than crashing the Express server or returning an unhandled 500 error, the backend catches provider errors and returns an HTTP 200 fallback response: `{ description: "", fallback: true, message: "AI suggestions are temporarily unavailable..." }`. The frontend detects this fallback flag, displays a friendly notice to the user, and enables manual task description entry so core task management remains uninterrupted.
 
-### 4. What is a workflow?
-A **workflow** is a configurable automated procedure defined in a YAML file inside the `.github/workflows/` directory. It is made up of one or more jobs and is triggered either by repository events (e.g., a push to `main`), on a scheduled cron timer, or manually via `workflow_dispatch`.
+### 4. What is prompt engineering, and what prompt did you use?
+**Answer:** Prompt engineering is the practice of structuring, refining, and optimizing natural language instructions given to an LLM to produce predictable, accurate, and relevant outputs. In this practical, the system prompt instructs the AI:
+> *"You are a helpful assistant for a task management application. Given a task title, generate a concise, practical, and actionable task description (1-3 sentences). Return only the description text without quotation marks, bullet points, or markdown headings."*  
+This guarantees uniform, production-ready suggestions suitable for direct display in the UI.
 
-### 5. What are jobs and steps?
-- **Job:** A set of steps that execute on the same runner (virtual machine or container). By default, multiple jobs run in parallel, but dependencies can be configured using `needs:` (e.g., `build-and-test` depends on `lint`).
-- **Step:** An individual task within a job. A step can either run shell commands (`run: npm test`) or execute a reusable pre-built GitHub Action (`uses: actions/checkout@v4`).
+### 5. Why is it important to allow the user to edit the generated description?
+**Answer:** AI models can hallucinate, misunderstand domain context, or provide descriptions that don't match the user's specific intent. By placing the AI output in an editable `<textarea>` and presenting an explicit disclaimer (`"AI-generated suggestion — please review and edit before saving."`), the application follows Human-in-the-Loop (HITL) best practices, granting the user ultimate authority over their task data.
 
-### 6. Why is automated testing important?
-Automated testing ensures that new features, bug fixes, or refactoring do not break existing functionality. It eliminates human error associated with manual testing, executes rapidly on every single commit, and provides rapid feedback so defects are caught and fixed immediately before code reaches users.
+### 6. What are the rate limits of the AI API you used, and how can you handle rate-limit errors in the app?
+**Answer:** Upstream AI providers impose Tier-based rate limits measured in Requests Per Minute (RPM) and Tokens Per Minute (TPM). In our application, rate-limit errors are handled at two levels:
+1. **Application-level prevention:** An in-memory rate limiter restricts requests to 1 request per 60 seconds per task title/IP, returning an HTTP `429 Too Many Requests` with a `retryAfter` timestamp.
+2. **Provider error handling:** If upstream returns a `429 RateLimitError`, our backend catches it, logs the incident server-side, and delivers a controlled fallback response instructing the user to wait or proceed manually.
 
-### 7. What happens when a test fails?
-When an automated test fails:
-1. The test runner (Jest) outputs a descriptive failure message detailing the expected versus received values.
-2. The process exits with a non-zero exit code (`exit 1`).
-3. GitHub Actions immediately marks the step and job as failed with a red "X".
-4. Dependent downstream jobs (like deployment) are automatically prevented from running, safeguarding production.
+### 7. How would you add a rate limiter to prevent abuse of the AI endpoint?
+**Answer:** Rate limiting can be implemented using sliding window counters or token buckets in memory (or backed by Redis in distributed deployments). In our implementation, a Map stores timestamps keyed by `clientIP:title`. When a request arrives, the server checks `Date.now() - lastRequestTime`. If the difference is less than 60,000 ms, the request is rejected with HTTP `429` and a header/body indicating the seconds remaining before retry.
 
-### 8. Why must the workflow be inside `.github/workflows/`?
-GitHub specifically monitors the `.github/workflows/` directory in repository branches to discover and parse workflow definitions. Any workflow YAML file placed in another directory or with an invalid extension will not be detected or registered by the GitHub Actions engine.
-
-### 9. What happens if the test file path is incorrect?
-If the test file path or test script is incorrect, Jest or npm will fail to locate the tests and exit with an error such as `No tests found` or `Command failed`. The workflow will fail at the test step, but the failure log will reflect a file configuration error rather than an assertion failure in application logic.
-
-### 10. Why is a deliberately failed test useful?
-A deliberately failed test verifies that the CI pipeline is functioning properly and is genuinely capable of detecting defects. It proves that the pipeline is not configured to pass trivially (e.g., missing assertions or ignoring errors) and validates that a broken build will halt the pipeline and produce readable failure diagnostics.
-
-### 11. What is the purpose of Jest and Supertest?
-- **Jest:** A complete testing framework providing a test runner, assertion library (`expect()`), and mock/spy utilities.
-- **Supertest:** A library built specifically for testing HTTP APIs. It allows developers to send virtual HTTP requests (`GET`, `POST`, `PUT`, `DELETE`) to Express applications without starting a live web server or binding to network ports.
-
-### 12. How does this practical connect to Docker and Docker Compose from Practical 11?
-In Practical 11, the application was containerized using Docker and orchestrated using Docker Compose for local multi-service execution. In Practical 12, CI with GitHub Actions provides the automated verification phase that precedes containerization and deployment. In a full production pipeline, the CI test job verifies application code quality, and upon success, triggers a Docker build and push job to publish container images.
+### 8. What are some ethical considerations when using AI-generated content in web applications?
+**Answer:** Key ethical considerations include:
+1. **Transparency & Attribution:** Disclosing to users that content was generated by AI rather than a human.
+2. **Bias & Harmful Content Prevention:** Ensuring prompts and provider safety filters prevent toxic, biased, or harmful outputs.
+3. **Data Privacy:** Ensuring sensitive task titles or confidential corporate notes are not sent to third-party AI APIs without user consent or used for unauthorized model training.
+4. **Accountability & Control:** Never auto-committing AI actions without human verification and editability.
 
 ---
 
-## 7. Deliverables & Git Commit History
-
-The repository preserves the complete progressive history across all practicals:
-
-| Commit SHA | Commit Message | Description |
-|---|---|---|
-| `5ee730a` | `feat: setup CI/CD pipeline with GitHub Actions, Jest tests, and ESLint` | Initial CI configuration with `.github/workflows/ci.yml`, `api.test.js`, and `eslint.config.js` |
-| `cc386bb` | `test: deliberately break assertion in GET /tasks to demonstrate CI failure` | Deliberate assertion failure (`expect(res.statusCode).toBe(500)`) triggering Red X in GitHub Actions |
-| `85dea36` | `fix: correct test assertion in GET /tasks to restore green CI pipeline` | Restored valid assertion (`expect(res.statusCode).toBe(200)`), achieving all-green CI status |
-| Latest | `docs: comprehensive Practical 12 documentation, screenshots, and viva answers` | Updated README with complete architecture, screenshots, and viva questions |
-
----
 *Developed by Mahek Dhebariya (24CS018) for ITUE301 Advanced Web Development Frameworks, CHARUSAT.*

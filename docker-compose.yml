@@ -32,6 +32,8 @@ services:
       PORT: 5000
       MONGO_URI: mongodb://mongodb:27017/taskmanager
       JWT_SECRET: p7_task_manager_secure_jwt_secret_key_2026_charusat
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     depends_on:
       mongodb:
         condition: service_healthy
