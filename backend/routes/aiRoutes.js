@@ -75,13 +75,13 @@ router.post("/generate-description", async (req, res) => {
         rateLimitMap.set(rateLimitKey, now);
 
         // 3. Check for API Keys
-        const openAiKey = process.env.OPENAI_API_KEY;
         const geminiKey = process.env.GEMINI_API_KEY;
+        const openAiKey = process.env.OPENAI_API_KEY;
 
         const isPlaceholderKey = (key) => !key || key.includes("your_") || key.trim() === "";
 
         // If no keys are provided or only placeholders exist, return graceful fallback
-        if (!customOpenAiClient && isPlaceholderKey(openAiKey) && isPlaceholderKey(geminiKey)) {
+        if (!customOpenAiClient && isPlaceholderKey(geminiKey) && isPlaceholderKey(openAiKey)) {
             return res.status(200).json({
                 description: "",
                 fallback: true,
@@ -89,55 +89,34 @@ router.post("/generate-description", async (req, res) => {
             });
         }
 
-        // 4. Try OpenAI if key is present or custom mock is active
-        if (customOpenAiClient || !isPlaceholderKey(openAiKey)) {
+        // 4. If custom mock client is active (test mode), return mocked response immediately
+        if (customOpenAiClient) {
             try {
-                const openai = customOpenAiClient || new OpenAI({
-                    apiKey: openAiKey,
-                    timeout: 10000
+                const completion = await customOpenAiClient.chat.completions.create({
+                    messages: [{ role: "user", content: cleanTitle }]
                 });
-
-                const completion = await openai.chat.completions.create({
-                    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-                    messages: [
-                        {
-                            role: "system",
-                            content: "You are a helpful assistant that writes clear, practical, and concise 1-2 sentence descriptions for task management applications based only on the task title. Do not output markdown headers or quotation marks. Output only the description text."
-                        },
-                        {
-                            role: "user",
-                            content: `Write a short task description for: ${cleanTitle}`
-                        }
-                    ],
-                    max_tokens: 120,
-                    temperature: 0.7
-                });
-
                 const description = completion.choices[0]?.message?.content?.trim() || "";
-
                 if (description) {
                     return res.status(200).json({
                         description,
                         fallback: false
                     });
                 }
-            } catch (openAiError) {
-                console.error("[AI Service] OpenAI provider error:", openAiError.message);
-                // If Gemini key is also available, fallback to Gemini, otherwise proceed to catch
-                if (isPlaceholderKey(geminiKey)) {
-                    return res.status(200).json({
-                        description: "",
-                        fallback: true,
-                        message: "AI suggestions are temporarily unavailable. Please write the description manually."
-                    });
-                }
+            } catch (mockError) {
+                console.error("[AI Service] Mock error:", mockError.message);
+                return res.status(200).json({
+                    description: "",
+                    fallback: true,
+                    message: "AI suggestions are temporarily unavailable. Please write the description manually."
+                });
             }
         }
 
-        // 5. Try Gemini alternative if key is present
+        // 5. Try Gemini as primary provider
         if (!isPlaceholderKey(geminiKey)) {
             try {
-                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
+                const geminiModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+                const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
                 const geminiRes = await fetch(geminiUrl, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -172,6 +151,43 @@ router.post("/generate-description", async (req, res) => {
                 console.error("[AI Service] Gemini returned status:", geminiRes.status);
             } catch (geminiError) {
                 console.error("[AI Service] Gemini error:", geminiError.message);
+            }
+        }
+
+        // 6. Optional OpenAI fallback if key is configured
+        if (!isPlaceholderKey(openAiKey)) {
+            try {
+                const openai = new OpenAI({
+                    apiKey: openAiKey,
+                    timeout: 10000
+                });
+
+                const completion = await openai.chat.completions.create({
+                    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "You are a helpful assistant that writes clear, practical, and concise 1-2 sentence descriptions for task management applications based only on the task title. Do not output markdown headers or quotation marks. Output only the description text."
+                        },
+                        {
+                            role: "user",
+                            content: `Write a short task description for: ${cleanTitle}`
+                        }
+                    ],
+                    max_tokens: 120,
+                    temperature: 0.7
+                });
+
+                const description = completion.choices[0]?.message?.content?.trim() || "";
+
+                if (description) {
+                    return res.status(200).json({
+                        description,
+                        fallback: false
+                    });
+                }
+            } catch (openAiError) {
+                console.error("[AI Service] OpenAI provider error:", openAiError.message);
             }
         }
 
