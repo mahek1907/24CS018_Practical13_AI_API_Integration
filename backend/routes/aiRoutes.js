@@ -115,7 +115,7 @@ router.post("/generate-description", async (req, res) => {
         // 5. Try Gemini as primary provider
         if (!isPlaceholderKey(geminiKey)) {
             try {
-                const geminiModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+                const geminiModel = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
                 const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
                 const geminiRes = await fetch(geminiUrl, {
                     method: "POST",
@@ -135,7 +135,7 @@ router.post("/generate-description", async (req, res) => {
                             temperature: 0.7
                         }
                     }),
-                    signal: AbortSignal.timeout(10000)
+                    signal: AbortSignal.timeout(25000)
                 });
 
                 if (geminiRes.ok) {
