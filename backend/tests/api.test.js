@@ -250,6 +250,17 @@ describe("Task Management API - CI/CD Automated Test Suite", () => {
         });
 
         test("POST /api/ai/generate-description returns 429 when rate limit is exceeded on same task", async () => {
+            const aiRoutes = require("../routes/aiRoutes");
+            aiRoutes.__setMockClient({
+                chat: {
+                    completions: {
+                        create: jest.fn().mockResolvedValue({
+                            choices: [{ message: { content: "Mocked description" } }]
+                        })
+                    }
+                }
+            });
+
             const res1 = await request(app)
                 .post("/api/ai/generate-description")
                 .send({ taskId: "task-12345", title: "Rate limiting test task" });
